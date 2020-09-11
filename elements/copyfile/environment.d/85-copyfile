@@ -1,0 +1,1 @@
+export COPYFILE="$(dirname ${BASH_SOURCE[0]})/../util/copyfile"

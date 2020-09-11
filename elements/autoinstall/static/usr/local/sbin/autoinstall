@@ -1,0 +1,88 @@
+#!/bin/bash
+
+set -e
+shopt -s nullglob
+
+zero_disk() {
+    dst="$1"
+    
+    dd \
+        if=/dev/zero \
+        of="${dst}" \
+        bs=1M \
+        count=1
+}
+
+write_image() {
+    src="$1"
+    dst="$2"
+    
+    dd \
+            if="${src}" \
+            bs=1M \
+        | dd \
+            of="${dst}" \
+            bs=1M \
+            oflag=sync \
+            status=progress
+}
+
+verify_image() {
+    src="$1"
+    size="$2"
+    
+    dd \
+            if="${src}" \
+            bs=1024M \
+            count="${size}" \
+            iflag=count_bytes \
+            status=progress \
+        | md5sum -b \
+        | cut -f1 -d' '
+}
+
+[ -d '/srv/autoinstall' ]
+cd /srv/autoinstall
+
+for img in *.img
+do
+    dev="/dev/$(basename ${img} .img)"
+    size="$( stat -c '%s' ${img} )"
+    
+    if [ -b "${dev}" ]
+    then
+        echo "Installing '${img}' onto '${dev}' using 1M blocksize..."
+        time write_image "${img}" "${dev}"
+        
+        if [ -f "${img}.md5" ]
+        then
+            echo 'Verifying copy and checksum...'
+            file_md5="$( < ${img}.md5 )"
+            disk_md5="$( verify_image ${dev} ${size} )"
+            
+            if [ "${file_md5}" = "${disk_md5}" ]
+            then
+                echo 'Verified'
+            else
+                echo "$0: Copy failed, zeroing disk and aborting" >&2
+                zero_disk "${dev}"
+                exit 1
+            fi
+        else
+            echo "$0: Checksum file '${img}.md5' not found, skipping verify" >&2
+        fi
+    else
+        echo "$0: Device '${dev}' not found, skipping" >&2
+    fi
+done
+
+echo 'All installations completed'
+sleep 1
+echo 'Scheduling shutdown'
+shutdown
+sleep 1
+echo 'Ejecting CD-ROM'
+eject -m || echo "$0: Could not eject CD-ROM"
+sleep 1
+echo 'Autoinstallation process finished'
+sleep 1

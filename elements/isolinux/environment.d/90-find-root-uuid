@@ -1,0 +1,8 @@
+if [ -n "${TARGET_ROOT:-}" ]
+then
+    blockdev="$( findmnt -n -o SOURCE -M ${TARGET_ROOT} || true )"
+    if [ -n "${blockdev}" ]
+    then
+        export DIB_IMAGE_ROOT_FS_UUID="$( blkid -s UUID -o value ${blockdev} )"
+    fi
+fi

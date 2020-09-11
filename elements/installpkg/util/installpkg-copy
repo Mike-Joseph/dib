@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -eu
+
+USAGE_STR='[OPTIONS] <PACKAGE SOURCE>'
+
+syntax() {
+    echo "Usage: $0 $USAGE_STR" >&2
+    echo "           $0 -h" >&2
+    exit 1
+}
+
+usage() {
+    echo "Usage: $0 $USAGE_STR" >&2
+    echo >&2
+    echo "Options:" >&2
+    echo "   -h            Display this help information" >&2
+    echo "   -p <PHASE>    Perform installations during <PHASE> (default: install.d)" >&2
+    echo >&2
+    exit 1
+}
+
+warn() {
+    echo "$0: $1" >&2
+}
+
+die() {
+    warn "$1"
+    exit 2
+}
+
+PHASE='install.d'
+
+while getopts 'hp:' opt ; do
+    case "$opt" in
+        p) PHASE="${OPTARG}" ;;
+        h) usage ;;
+        *) syntax ;;
+    esac
+done
+shift "$(( $OPTIND - 1 ))"
+
+[ $# -eq 1 ] || syntax
+
+"${COPYFILE}" "$1" "${TMP_HOOKS_PATH}/installpkg/${PHASE}/"

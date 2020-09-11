@@ -1,0 +1,89 @@
+#!/bin/bash
+
+set -eu
+
+USAGE_STR='[OPTIONS] <SOURCE> <DEST>'
+
+syntax() {
+    echo "Usage: $0 $USAGE_STR" >&2
+    echo "           $0 -h" >&2
+    exit 1
+}
+
+usage() {
+    echo "Usage: $0 $USAGE_STR" >&2
+    echo >&2
+    echo "Options:" >&2
+    echo "   -h            Display this help information" >&2
+    echo "   -n            Do not clobber <DEST> if it exists" >&2
+    echo "   -p            Create missing directories along the path to <DEST>" >&2
+    echo "   -m <MODE>     Use <MODE> as the file mode when copying" >&2
+    echo >&2
+    exit 1
+}
+
+warn() {
+    echo "$0: $1" >&2
+}
+
+die() {
+    warn "$1"
+    exit 2
+}
+
+download_file() {
+    local url="$1"
+    
+    case "${url}" in
+        http:/*|https:/*|ftp:/*|file:/*)
+            ( cd "${DOWNLOADS}" && curl -O -- "${url}" ) ;;
+        s3:/*)
+            ( aws s3 cp "${url}" "${DOWNLOADS}" ) ;;
+        *)
+            ( cd "$(dirname $0)/.." && cp -pv -- "${url}" "${DOWNLOADS}" ) ;;
+    esac
+}
+
+install_file() {
+    [ $# -eq 2 ] || die 'Invalid number of files created in downloads directory'
+    local src="$1"
+    local dst="$2"
+    
+    if [ -v FILE_MODE ]
+    then
+        chmod -- "${FILE_MODE}" "${src}"
+    fi
+    if [ -v NOCLOBBER ]
+    then
+        local clobber="${dst}"
+        [ -d "${dst}" ] && clobber="${dst}/$(basename ${src})"
+        [ -e "${clobber}" ] && die "File already exists: $(realpath -s -- ${clobber})"
+    fi
+    if [ -v CREATE_DIRS ]
+    then
+        case "${dst}" in
+            */) mkdir -p -- "${dst}" ;;
+            *) mkdir -p -- "$(dirname -- ${dst})" ;;
+        esac
+    fi
+    cp -pv -- "${src}" "${dst}"
+}
+
+while getopts 'hnpm:' opt ; do
+    case "$opt" in
+        m) FILE_MODE="${OPTARG}" ;;
+        p) CREATE_DIRS=1 ;;
+        n) NOCLOBBER=1 ;;
+        h) usage ;;
+        *) syntax ;;
+    esac
+done
+shift "$(( $OPTIND - 1 ))"
+
+[ $# -eq 2 ] || syntax
+
+export DOWNLOADS="$(mktemp -d)"
+trap 'rm -rf "${DOWNLOADS}"' EXIT
+
+download_file "$1"
+install_file "${DOWNLOADS}"/* "$2"

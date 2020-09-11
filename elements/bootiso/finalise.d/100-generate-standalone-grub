@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Generate standalone GRUB2 images for UEFI and BIOS booting
+#
+# Based on the DIB core, the existing DIB 'iso' and 'baremetal' elements,
+# and the excellent HOWTO at:
+#     https://willhaley.com/blog/custom-debian-live-environment/
+
+set -eu
+
+VOL_NAME='BOOTISO'
+GRUB_DIR='/boot/standalone'
+EFI_GRUB="${GRUB_DIR}/bootx64.efi"
+EFI_IMG="${GRUB_DIR}/efiboot.img"
+BIOS_GRUB="${GRUB_DIR}/core.img"
+BIOS_IMG="${GRUB_DIR}/bios.img"
+GRUB_MBR="${GRUB_DIR}/hybrid.img"
+
+echo "Creating standalone GRUB2 directory ${GRUB_DIR}"
+mkdir -p "${GRUB_DIR}"
+
+# SOURCE: diskimage_builder/elements/iso/cleanup.d/100-build-iso
+IMAGE_NAME="${IMAGE_NAME:-'image'}"
+
+# Configure GRUB2
+# SOURCE: https://willhaley.com/blog/custom-debian-live-environment/
+GRUB_CFG='/boot/standalone/grub.cfg'
+cat << _EOF_ > "${GRUB_CFG}"
+search --set=root --file /${VOL_NAME}
+
+insmod progress
+
+set default="0"
+set timeout=10
+
+menuentry "${IMAGE_NAME}" {
+    linux /vmlinuz boot=live nomodeset
+    initrd /initrd
+}
+_EOF_
+echo "Wrote GRUB2 configuration to ${GRUB_CFG}"
+
+# Build UEFI boot image
+# SOURCE: https://willhaley.com/blog/custom-debian-live-environment/
+grub-mkstandalone \
+    --format='x86_64-efi' \
+    --output="${EFI_GRUB}" \
+    --locales='' \
+    --fonts='' \
+    "boot/grub/grub.cfg=${GRUB_CFG}"
+
+# Build BIOS boot image
+# SOURCE: https://willhaley.com/blog/custom-debian-live-environment/
+grub-mkstandalone \
+    --format='i386-pc' \
+    --output="${BIOS_GRUB}" \
+    --install-modules='linux normal iso9660 biosdisk memdisk search tar ls progress' \
+    --modules='linux normal iso9660 biosdisk search' \
+    --locales='' \
+    --fonts='' \
+    "boot/grub/grub.cfg=${GRUB_CFG}"
+cat '/usr/lib/grub/i386-pc/cdboot.img' "${BIOS_GRUB}" \
+    > "${BIOS_IMG}"
+
+# Copy hybrid MBR image
+cp '/usr/lib/grub/i386-pc/boot_hybrid.img' "${GRUB_MBR}"

@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Create a bootable ISO image from the prepared filesystem
+#
+# Based on the DIB core, the existing DIB 'iso' and 'baremetal' elements,
+# and the excellent HOWTO at:
+#     https://willhaley.com/blog/custom-debian-live-environment/
+
+set -eu
+
+source "${_LIB}/img-functions"
+
+VOL_NAME='BOOTISO'
+GRUB_DIR="${TARGET_ROOT}/boot/standalone"
+EFI_GRUB="${GRUB_DIR}/bootx64.efi"
+EFI_IMG="${GRUB_DIR}/efiboot.img"
+BIOS_GRUB="${GRUB_DIR}/core.img"
+BIOS_IMG="${GRUB_DIR}/bios.img"
+GRUB_MBR="${GRUB_DIR}/hybrid.img"
+
+# Build UEFI disk image
+# SOURCE: https://willhaley.com/blog/custom-debian-live-environment/
+dd if=/dev/zero of="${EFI_IMG}" bs=1M count=10
+mkfs.vfat "${EFI_IMG}"
+mmd -i "${EFI_IMG}" efi efi/boot
+mcopy -i "${EFI_IMG}" "${EFI_GRUB}" ::efi/boot/
+
+# SOURCE: diskimage_builder/elements/iso/cleanup.d/100-build-iso
+IMAGE_NAME="${IMAGE_NAME:-'image'}"
+# Create a temporary build directory for holding the contents of ISO
+TMP_IMAGE_DIR="${TMP_BUILD_DIR}/bootiso"
+echo "Creating temporary directory ${TMP_IMAGE_DIR}"
+mkdir -p "${TMP_IMAGE_DIR}"
+
+# SOURCE: diskimage_builder/elements/baremetal/cleanup.d/99-extract-kernel-and-ramdisk
+# Dig up the initrd and kernel to use.
+select_boot_kernel_initrd "${TARGET_ROOT}"
+cp "${BOOTDIR}/${KERNEL}" "${TMP_IMAGE_DIR}/vmlinuz"
+cp "${BOOTDIR}/${RAMDISK}" "${TMP_IMAGE_DIR}/initrd"
+echo 'Copied kernel and initrd'
+
+# Create filesystem image
+# SOURCE: https://willhaley.com/blog/custom-debian-live-environment/
+mkdir -p "${TMP_IMAGE_DIR}/live"
+sudo mksquashfs \
+    "${TARGET_ROOT}" \
+    "${TMP_IMAGE_DIR}/live/filesystem.squashfs" \
+    -wildcards \
+    -e boot \
+    -e 'proc/*' \
+    -e 'sys/*'
+echo "Wrote squashfs filesystem to: ${TMP_IMAGE_DIR}/live/filesystem.squashfs"
+echo
+
+# Generate ISO file
+# SOURCE: https://willhaley.com/blog/custom-debian-live-environment/
+touch "${TMP_IMAGE_DIR}/${VOL_NAME}"
+xorriso \
+    -as mkisofs \
+    -iso-level 3 \
+    -full-iso9660-filenames \
+    -volid "${VOL_NAME}" \
+    -eltorito-boot \
+        boot/grub/bios.img \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+        --eltorito-catalog boot/grub/boot.cat \
+    --grub2-boot-info \
+    --grub2-mbr "${GRUB_MBR}" \
+    -eltorito-alt-boot \
+        -e EFI/efiboot.img \
+        -no-emul-boot \
+    -append_partition 2 0xef "${EFI_IMG}" \
+    -output "${IMAGE_NAME}.iso" \
+    -graft-points \
+        "${TMP_IMAGE_DIR}" \
+        "/boot/grub/bios.img=${BIOS_IMG}" \
+        "/EFI/efiboot.img=${EFI_IMG}"
+echo "Wrote final image to: ${IMAGE_NAME}.iso"
+echo

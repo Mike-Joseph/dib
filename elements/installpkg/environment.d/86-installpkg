@@ -1,0 +1,1 @@
+export INSTALLPKG="$(dirname ${BASH_SOURCE[0]})/../util/installpkg-copy"

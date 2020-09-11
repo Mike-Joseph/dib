@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -eu
+
+mkdir -p "${TMP_HOOKS_PATH}/installpkg"/{pre-install.d,install.d,post-install.d}

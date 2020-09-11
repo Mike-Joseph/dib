@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -e
+
+AUTOINSTALL_DIR='/tmp/in_target.d/autoinstall'
+AUTOINSTALL_TARGET='/srv/autoinstall'
+RC_LOCAL='/etc/rc.local'
+
+cp -a "${AUTOINSTALL_DIR}" "${AUTOINSTALL_TARGET}"
+
+echo 'Autoinstall images:'
+ls -al "${AUTOINSTALL_TARGET}"
+
+[ -x "${RC_LOCAL}" ]
+cat << _EOT_ >> "${RC_LOCAL}"
+# Run autoinstall script (will reboot system when complete)
+( sleep 30 ; /usr/local/sbin/autoinstall ) &
+
+_EOT_

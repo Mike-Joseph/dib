@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -eu
+shopt -s nullglob
+
+PHASE="$(basename $(dirname $(realpath -s $0)))"
+case "${DISTRO_NAME}" in
+    ubuntu|debian)
+        PKG_EXT='deb' ;;
+    *)
+        echo "Skipping unsupported distribution [${DISTRO_NAME}]..." >&2
+esac
+
+install-packages "/tmp/in_target.d/installpkg/${PHASE}"/*."${PKG_EXT}"

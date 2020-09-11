@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -ue
+
+AUTOINSTALL_DIR="${TMP_HOOKS_PATH}/autoinstall"
+
+mkdir -p "${AUTOINSTALL_DIR}"
+cp "${DIB_AUTOINSTALL_IMAGE}" \
+    "${AUTOINSTALL_DIR}/${DIB_AUTOINSTALL_DEV}.img"
+md5sum -b "${DIB_AUTOINSTALL_IMAGE}" \
+    | cut -f1 -d' ' \
+    > "${AUTOINSTALL_DIR}/${DIB_AUTOINSTALL_DEV}.img.md5"

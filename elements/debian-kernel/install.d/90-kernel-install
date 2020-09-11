@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -e
+
+# Purge all existing kernels and associated modules (importantly, this also
+# purges the linux-image-generic task package)
+dpkg-query -W -f '${binary:Package}\n' \
+	| grep -E '^linux-(image|modules)-' \
+	| xargs apt purge -y
+
+# Install the target kernel
+apt install -y \
+	"linux-image-${DIB_KERNEL_VERSION}" \
+	"linux-modules-${DIB_KERNEL_VERSION}" \
+	"linux-modules-extra-${DIB_KERNEL_VERSION}"
